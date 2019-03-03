@@ -61,7 +61,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 if(location != null){
                     Log.d("MyLocation", "("+location.getLongitude()+","+location.getLatitude()+")");
                     //mTextView.setText("( "+location.getLongitude()+" , "+location.getLatitude()+" )");
-                    //Toast.makeText(MapsActivity.this, " ( "+location.getLatitude()+" , "+location.getLongitude()+" ) ", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MapsActivity.this, " ( "+location.getLatitude()+" , "+location.getLongitude()+" ) ", Toast.LENGTH_SHORT).show();
                     LatLng loc = new LatLng(location.getLatitude(), location.getLongitude());
                     Marker m = mMap.addMarker(new MarkerOptions().position(loc).title("Me"));
                     animateMarker(m, loc, true);

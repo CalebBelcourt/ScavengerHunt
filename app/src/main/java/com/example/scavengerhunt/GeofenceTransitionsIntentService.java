@@ -25,25 +25,62 @@ public class GeofenceTransitionsIntentService extends IntentService {
         super(TAG);  // use TAG to name the IntentService worker thread
     }
 
-    @Override
     protected void onHandleIntent(Intent intent) {
-        GeofencingEvent event = GeofencingEvent.fromIntent(intent);
-        if (event.hasError()) {
-            Log.e(TAG, "GeofencingEvent Error: " + event.getErrorCode());
+        GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
+        if (geofencingEvent.hasError()) {
+            //String errorMessage = GeofenceErrorMessages.getErrorString(this,
+              //      geofencingEvent.getErrorCode());
+            //Log.e(TAG, errorMessage);
             return;
         }
 
-        int geofenceTransition = event.getGeofenceTransition();
+        // Get the transition type.
+        int geofenceTransition = geofencingEvent.getGeofenceTransition();
 
-        if((geofenceTransition == Geofence.GEOFENCE_TRANSITION_DWELL)){
+        // Test that the reported transition was of interest.
+        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
+                geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT ||
+                geofenceTransition == Geofence.GEOFENCE_TRANSITION_DWELL) {
 
+            // Get the geofences that were triggered. A single event can trigger
+            // multiple geofences.
+            List<Geofence> triggeringGeofences = geofencingEvent.getTriggeringGeofences();
+
+            // Get the transition details as a String.
+            String geofenceTransitionDetails = getGeofenceTransitionDetails(
+                    geofenceTransition,
+                    triggeringGeofences
+            );
+
+            // Send notification and log the transition details.
+            sendNotification(geofenceTransitionDetails);
+            Log.i(TAG, geofenceTransitionDetails);
+        } else {
+            // Log the error.
+            //Log.e(TAG, getString(R.string.geofence_transition_invalid_type,
+              //      geofenceTransition));
         }
-
-        String description = getGeofenceTransitionDetails(event);
-        sendNotification(description);
     }
 
+    //MODIFY THIS TO MAKE DWELLING WORK
+    private String getGeofenceTransitionDetails(int geoFenceTransition, List<Geofence> triggeringGeofences) {
+        // get the ID of each geofence triggered
+        ArrayList<String> triggeringGeofencesList = new ArrayList<>();
+        for ( Geofence geofence : triggeringGeofences ) {
+            triggeringGeofencesList.add( geofence.getRequestId() );
+        }
 
+        String status = null;
+        if ( geoFenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER )
+            status = "Entering ";
+        else if ( geoFenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT )
+            status = "Exiting ";
+        else if ( geoFenceTransition == Geofence.GEOFENCE_TRANSITION_DWELL )
+            status = "Dwelling in ";
+        return status + TextUtils.join( ", ", triggeringGeofencesList);
+    }
+
+/*
     private static String getGeofenceTransitionDetails(GeofencingEvent event) {
         String transitionString =
                 GeofenceStatusCodes.getStatusCodeString(event.getGeofenceTransition());
@@ -53,7 +90,9 @@ public class GeofenceTransitionsIntentService extends IntentService {
         }
         return String.format("%s: %s", transitionString, TextUtils.join(", ", triggeringIDs));
     }
+    */
 
+//MODIFY THIS TO SEND NOTIFICATION
     public void sendNotification(String notificationDetails) {
         // Create an explicit content Intent that starts MainActivity.
         Intent notificationIntent = new Intent(getApplicationContext(), MapsActivity.class);
