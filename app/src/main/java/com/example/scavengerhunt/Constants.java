@@ -11,7 +11,7 @@ public class Constants {
 
     public static final HashMap<String, LatLng> LANDMARKS = new     HashMap<String, LatLng>();
     static {
-        LANDMARKS.put("North Shore", new LatLng(50.704766, -120.3735887));
+        LANDMARKS.put("OM East", new LatLng(50.671214, -120.361587));
 
         LANDMARKS.put("OM North", new LatLng(50.671691, -120.362967));
 

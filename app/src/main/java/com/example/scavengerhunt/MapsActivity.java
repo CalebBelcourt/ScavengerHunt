@@ -60,7 +60,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             for(Location location:locationResult.getLocations()){
                 if(location != null){
                     Log.d("MyLocation", "("+location.getLongitude()+","+location.getLatitude()+")");
-                    //mTextView.setText("( "+location.getLongitude()+" , "+location.getLatitude()+" )");
                     Toast.makeText(MapsActivity.this, " ( "+location.getLatitude()+" , "+location.getLongitude()+" ) ", Toast.LENGTH_SHORT).show();
                     LatLng loc = new LatLng(location.getLatitude(), location.getLongitude());
                     Marker m = mMap.addMarker(new MarkerOptions().position(loc).title("Me"));
@@ -116,7 +115,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     @Override
                     public void onSuccess(Void aVoid) {
                         // Geofences added
-                        Toast.makeText(MapsActivity.this, "Success", Toast.LENGTH_SHORT).show();
+                        //Toast.makeText(MapsActivity.this, "Success", Toast.LENGTH_SHORT).show();
 
                     }
                 })
@@ -124,7 +123,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         // Failed to add geofences
-                        Toast.makeText(MapsActivity.this, "Fail", Toast.LENGTH_SHORT).show();
+                        //Toast.makeText(MapsActivity.this, "Fail", Toast.LENGTH_SHORT).show();
                     }
                 });
 /*
@@ -150,7 +149,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
 
-        LatLng loc = new LatLng(50.704767, -120.3735888);
+        LatLng loc = new LatLng(50.671238, -120.362907);
 
         mMap = googleMap;
         mMap.setMinZoomPreference(18);
