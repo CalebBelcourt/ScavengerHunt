@@ -3,7 +3,10 @@ package com.example.scavengerhunt;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Point;
@@ -11,11 +14,14 @@ import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+import android.view.View;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.TextView;
@@ -39,33 +45,51 @@ import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 
 import java.util.ArrayList;
 import java.util.Map;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
+    private enum PendingGeofenceTask {
+        ADD, REMOVE, NONE
+    }
+
+    private static final String TAG = MapsActivity.class.getSimpleName();
+    private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
     private FusedLocationProviderClient mFusedLocationClient;
     private LocationRequest mLocationRequest;
-    private static final int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 102;
     private GoogleMap mMap;
     private GeofencingClient geofencingClient;
     private ArrayList geofenceList;
     private PendingIntent geofencePendingIntent;
+    private PendingGeofenceTask mPendingGeofenceTask = PendingGeofenceTask.NONE;
     private LocationCallback mLocationCallback = new LocationCallback(){
         @Override
         public void onLocationResult(LocationResult locationResult) {
             for(Location location:locationResult.getLocations()){
                 if(location != null){
-                    Log.d("MyLocation", "("+location.getLongitude()+","+location.getLatitude()+")");
-                    Toast.makeText(MapsActivity.this, " ( "+location.getLatitude()+" , "+location.getLongitude()+" ) ", Toast.LENGTH_SHORT).show();
+                    Log.d("MyLocation", "("+location.getLatitude()+","+location.getLongitude()+")");
+                    //Toast.makeText(MapsActivity.this, " ( "+location.getLatitude()+" , "+location.getLongitude()+" ) ", Toast.LENGTH_SHORT).show();
                     LatLng loc = new LatLng(location.getLatitude(), location.getLongitude());
                     Marker m = mMap.addMarker(new MarkerOptions().position(loc).title("Me"));
                     animateMarker(m, loc, true);
                 }
             }
+        }
+    };
+
+    private BroadcastReceiver mReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String s = intent.getStringExtra("RESULT");
+            Toast.makeText(MapsActivity.this, s, Toast.LENGTH_SHORT).show();
+            //mTextView.setText(s);
+            Log.d(TAG, s);
         }
     };
 
@@ -81,9 +105,173 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        geofencingClient = LocationServices.getGeofencingClient(this);
         geofenceList = new ArrayList<Geofence>();
 
+        geofencePendingIntent = null;
+
+        geofencingClient = LocationServices.getGeofencingClient(this);
+
+        populateGeofenceList();
+
+        addGeofencesHandler();
+
+
+    }
+
+    /**
+     * Adds geofences, which sets alerts to be notified when the device enters or exits one of the
+     * specified geofences. Handles the success or failure results returned by addGeofences().
+     */
+    public void addGeofencesHandler() {
+        if (!checkPermissions()) {
+            mPendingGeofenceTask = PendingGeofenceTask.ADD;
+            requestPermissions();
+            return;
+        }
+        startLocationUpdate();
+        addGeofences();
+    }
+
+    /**
+     * Adds geofences. This method should be called after the user has granted the location
+     * permission.
+     */
+    @SuppressWarnings("MissingPermission")
+    private void addGeofences() {
+        if (!checkPermissions()) {
+            Log.d(TAG, "Insufficient Permission");
+            return;
+        }
+
+        geofencingClient.addGeofences(getGeofencingRequest(), getGeofencePendingIntent())
+                .addOnSuccessListener(this, new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Toast.makeText(MapsActivity.this, "Geofencing successfully added.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Geofencing successfully added.");
+                        mPendingGeofenceTask = PendingGeofenceTask.NONE;
+                        updateGeofencesAdded(!getGeofencesAdded());
+                        //setButtonsEnabledState();
+                    }
+                })
+                .addOnFailureListener(this, new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Toast.makeText(MapsActivity.this, "Could not add geofencing.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Could not add geofencing.");
+                    }
+
+
+                });
+
+    }
+
+    /**
+     * Removes geofences, which stops further notifications when the device enters or exits
+     * previously registered geofences.
+     */
+    public void removeGeofencesHandler() {
+        if (!checkPermissions()) {
+            mPendingGeofenceTask = PendingGeofenceTask.REMOVE;
+            requestPermissions();
+            return;
+        }
+        removeGeofences();
+        stopLocationUpdate();
+    }
+
+    /**
+     * Removes geofences. This method should be called after the user has granted the location
+     * permission.
+     */
+    @SuppressWarnings("MissingPermission")
+    private void removeGeofences() {
+        if (!checkPermissions()) {
+            Log.d(TAG, "Insufficient Permission");
+            return;
+        }
+
+        geofencingClient.removeGeofences(getGeofencePendingIntent())
+                .addOnSuccessListener(this, new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Toast.makeText(MapsActivity.this, "Geofencing successfully removed.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Geofencing successfully removed.");
+                        mPendingGeofenceTask = PendingGeofenceTask.NONE;
+                        updateGeofencesAdded(!getGeofencesAdded());
+                        //setButtonsEnabledState();
+                    }
+
+
+                })
+                .addOnFailureListener(this, new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Toast.makeText(MapsActivity.this, "Could not add geofencing.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Could not add geofencing.");
+                    }
+                });
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // unregister local broadcast
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(mReceiver);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // register local broadcast
+        IntentFilter filter = new IntentFilter(Constants.CUSTOM_INTENT);
+        LocalBroadcastManager.getInstance(this).registerReceiver(mReceiver, filter);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (!checkPermissions()) {
+            requestPermissions();
+        } else {
+            performPendingGeofenceTask();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        removeGeofencesHandler();
+    }
+
+    /**
+     * Performs the geofencing task that was pending until location permission was granted.
+     */
+    private void performPendingGeofenceTask() {
+        if (mPendingGeofenceTask == PendingGeofenceTask.ADD) {
+            addGeofences();
+        } else if (mPendingGeofenceTask == PendingGeofenceTask.REMOVE) {
+            removeGeofences();
+        }
+    }
+
+    /**
+     * Builds and returns a GeofencingRequest. Specifies the list of geofences to be monitored.
+     * Also specifies how the geofence notifications are initially triggered.
+     */
+    private GeofencingRequest getGeofencingRequest() {
+        GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
+        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
+        builder.addGeofences(geofenceList);
+        return builder.build();
+    }
+
+
+
+
+
+    private void populateGeofenceList() {
         for (Map.Entry<String, LatLng> entry : Constants.LANDMARKS.entrySet()) {
             geofenceList.add(new Geofence.Builder().setRequestId(entry.getKey())
 
@@ -95,61 +283,69 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     .setExpirationDuration(-1)
                     .setLoiteringDelay(Constants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
                     .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
-                            Geofence.GEOFENCE_TRANSITION_EXIT |
-                            Geofence.GEOFENCE_TRANSITION_DWELL)
+                            Geofence.GEOFENCE_TRANSITION_EXIT)
                     .build());
         }
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        geofencingClient.addGeofences(getGeofencingRequest(), getGeofencePendingIntent())
-                .addOnSuccessListener(this, new OnSuccessListener<Void>() {
-                    @Override
-                    public void onSuccess(Void aVoid) {
-                        // Geofences added
-                        //Toast.makeText(MapsActivity.this, "Success", Toast.LENGTH_SHORT).show();
-
-                    }
-                })
-                .addOnFailureListener(this, new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        // Failed to add geofences
-                        //Toast.makeText(MapsActivity.this, "Fail", Toast.LENGTH_SHORT).show();
-                    }
-                });
-/*
-        geofencingClient.removeGeofences(getGeofencePendingIntent())
-                .addOnSuccessListener(this, new OnSuccessListener<Void>() {
-                    @Override
-                    public void onSuccess(Void aVoid) {
-                        // Geofences removed
-                        Toast.makeText(MapsActivity.this, "Geofence Removed", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .addOnFailureListener(this, new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        // Failed to remove geofences
-                        Toast.makeText(MapsActivity.this, "Removal Failed", Toast.LENGTH_SHORT).show();
-                    }
-                });
-                */
     }
+
+    /**
+     * Returns true if geofences were added, otherwise false.
+     */
+    private boolean getGeofencesAdded() {
+        return PreferenceManager.getDefaultSharedPreferences(this).getBoolean(
+                Constants.GEOFENCES_ADDED_KEY, false);
+    }
+
+    /**
+     * Stores whether geofences were added ore removed in SharedPreferences;
+     *
+     * @param added Whether geofences were added or removed.
+     */
+    private void updateGeofencesAdded(boolean added) {
+        PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putBoolean(Constants.GEOFENCES_ADDED_KEY, added)
+                .apply();
+    }
+
+
+    /**
+     * Return the current state of the permissions needed.
+     */
+
+    private boolean checkPermissions() {
+        int permissionState = ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION);
+        return permissionState == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestPermissions() {
+        boolean shouldProvideRationale =
+                ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.ACCESS_FINE_LOCATION);
+
+        // Provide an additional rationale to the user. This would happen if the user denied the
+        // request previously, but didn't check the "Don't ask again" checkbox.
+        if (shouldProvideRationale) {
+            Log.i(TAG, "Displaying permission rationale to provide additional context.");
+            Toast.makeText(this, "Please grant permission", Toast.LENGTH_SHORT).show();
+        } else {
+            Log.i(TAG, "Requesting permission");
+            // Request permission. It's possible this can be auto answered if device policy
+            // sets the permission in a given state or the user denied the permission
+            // previously and checked "Never ask again".
+            ActivityCompat.requestPermissions(MapsActivity.this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    REQUEST_PERMISSIONS_REQUEST_CODE);
+        }
+    }
+
 
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
 
-        LatLng loc = new LatLng(50.671238, -120.362907);
+        LatLng loc = new LatLng(50.7047745, -120.3734651);
 
         mMap = googleMap;
         mMap.setMinZoomPreference(18);
@@ -203,7 +399,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         });
     }
 
-
+/*
     @Override
     protected void onResume() {
         super.onResume();
@@ -220,6 +416,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         super.onPause();
         stopLocationUpdate();
     }
+    */
 
     @SuppressLint("MissingPermission")
     private void startLocationUpdate(){
@@ -239,32 +436,34 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
     }
 
+    /*
     private boolean hasPermission(){
         return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
     }
+    */
 
+    /**
+     * Callback received when a permissions request has been completed.
+     */
     @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults){
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_READ_CONTACTS: {
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    startLocationUpdate();
-
-                } else {
-
-                }
-                return;
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        Log.i(TAG, "onRequestPermissionResult");
+        if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE) {
+            if (grantResults.length <= 0) {
+                Log.i(TAG, "User interaction was cancelled.");
+            } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i(TAG, "Permission granted.");
+                performPendingGeofenceTask();
+            } else {
+                Toast.makeText(this, "Need Permission, but denied!", Toast.LENGTH_SHORT).show();
+                mPendingGeofenceTask = PendingGeofenceTask.NONE;
             }
         }
     }
 
-    private GeofencingRequest getGeofencingRequest() {
-        GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
-        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
-        builder.addGeofences(geofenceList);
-        return builder.build();
-    }
+
 
     private PendingIntent getGeofencePendingIntent() {
         if (geofencePendingIntent != null) {
