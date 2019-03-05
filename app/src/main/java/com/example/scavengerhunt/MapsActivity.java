@@ -51,6 +51,7 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
@@ -59,6 +60,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         ADD, REMOVE, NONE
     }
 
+    private String s;
+    private List<String> sub;
     private static final String TAG = MapsActivity.class.getSimpleName();
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
     private FusedLocationProviderClient mFusedLocationClient;
@@ -85,9 +88,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String s = intent.getStringExtra("RESULT");
-            Toast.makeText(MapsActivity.this, s, Toast.LENGTH_SHORT).show();
+            s = intent.getStringExtra("RESULT");
+            //Toast.makeText(MapsActivity.this, s, Toast.LENGTH_SHORT).show();
             Log.d(TAG, s);
+            if(s.equals("Dwelling in the geofence: Home")
+            || s.equals("Dwelling in the geofence: OM East")
+            || s.equals("Dwelling in the geofence: OM North")
+            || s.equals("Dwelling in the geofence: OM South")){
+                removeGeofencesHandler();
+            }
         }
     };
 
@@ -145,18 +154,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .addOnSuccessListener(this, new OnSuccessListener<Void>() {
                     @Override
                     public void onSuccess(Void aVoid) {
-                        Toast.makeText(MapsActivity.this, "Geofencing successfully added.", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Geofencing successfully added.");
+                        Toast.makeText(MapsActivity.this, "Geofence successfully added.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Geofence successfully added.");
                         mPendingGeofenceTask = PendingGeofenceTask.NONE;
                         updateGeofencesAdded(!getGeofencesAdded());
-                        //setButtonsEnabledState();
                     }
                 })
                 .addOnFailureListener(this, new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Toast.makeText(MapsActivity.this, "Could not add geofencing.", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Could not add geofencing.");
+                        Toast.makeText(MapsActivity.this, "Could not add geofence.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Could not add geofence.");
                     }
 
 
@@ -175,7 +183,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             return;
         }
         removeGeofences();
-        stopLocationUpdate();
     }
 
     /**
@@ -189,25 +196,47 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             return;
         }
 
-        geofencingClient.removeGeofences(getGeofencePendingIntent())
+        if(s.equals("Dwelling in the geofence: Home")){
+            sub = geofenceRequestIDs.subList(0,1);
+        }else if(s.equals("Dwelling in the geofence: OM East")){
+            sub = geofenceRequestIDs.subList(1,2);
+        }else if(s.equals("Dwelling in the geofence: OM North")){
+            sub = geofenceRequestIDs.subList(2,3);
+        }else if(s.equals("Dwelling in the geofence: OM South")){
+            sub = geofenceRequestIDs.subList(3,4);
+        }
+
+        geofencingClient.removeGeofences(sub)
                 .addOnSuccessListener(this, new OnSuccessListener<Void>() {
                     @Override
                     public void onSuccess(Void aVoid) {
-                        Toast.makeText(MapsActivity.this, "Geofencing successfully removed.", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Geofencing successfully removed.");
+                        //Toast.makeText(MapsActivity.this, "Geofence successfully removed.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MapsActivity.this, "You got 10 points!", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Geofence successfully removed.");
                         mPendingGeofenceTask = PendingGeofenceTask.NONE;
                         updateGeofencesAdded(!getGeofencesAdded());
+                        removeDraw();
                     }
-
-
                 })
                 .addOnFailureListener(this, new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Toast.makeText(MapsActivity.this, "Could not add geofencing.", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Could not add geofencing.");
+                        Toast.makeText(MapsActivity.this, "Could not remove geofence.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Could not remove geofence.");
                     }
                 });
+    }
+
+    private void removeDraw(){
+        if(s.equals("Dwelling in the geofence: Home")){
+            circle1.remove();
+        }else if(s.equals("Dwelling in the geofence: OM East")){
+            circle2.remove();
+        }else if(s.equals("Dwelling in the geofence: OM North")){
+            circle3.remove();
+        }else if(s.equals("Dwelling in the geofence: OM South")){
+            circle4.remove();
+        }
     }
 
     @Override
@@ -240,6 +269,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onDestroy() {
         super.onDestroy();
         removeGeofencesHandler();
+        stopLocationUpdate();
     }
 
     /**
@@ -252,6 +282,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             removeGeofences();
         }
     }
+
+    List<String> geofenceRequestIDs = new ArrayList<>();
 
     /**
      * Builds and returns a GeofencingRequest. Specifies the list of geofences to be monitored.
@@ -280,6 +312,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             Geofence.GEOFENCE_TRANSITION_EXIT |
                             Geofence.GEOFENCE_TRANSITION_DWELL)
                     .build());
+
+            geofenceRequestIDs.add(entry.getKey());
         }
     }
 
@@ -335,12 +369,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
+    Circle circle1;
+    Circle circle2;
+    Circle circle3;
+    Circle circle4;
 
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
 
-        LatLng loc = new LatLng(50.7047745, -120.3734651);
+        LatLng loc = new LatLng(50.671240, -120.362420);
 
         mMap = googleMap;
         mMap.setMinZoomPreference(18);
@@ -354,7 +392,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     .fillColor(0x5557c4ff)
                     .center(fence)
                     .radius(Constants.GEOFENCE_RADIUS_IN_METERS);
-            Circle circle = mMap.addCircle(circleOptions);
+            if(entry.getKey().equals("Home")){
+                circle1 = mMap.addCircle(circleOptions);
+            }else if(entry.getKey().equals("OM East")){
+                circle2 = mMap.addCircle(circleOptions);
+            }else if(entry.getKey().equals("OM North")){
+                circle3 = mMap.addCircle(circleOptions);
+            }else if(entry.getKey().equals("OM South")){
+                circle4 = mMap.addCircle(circleOptions);
+            }
+
         }
     }
 

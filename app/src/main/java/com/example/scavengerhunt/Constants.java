@@ -6,7 +6,7 @@ import java.util.HashMap;
 
 public class Constants {
 
-    public static final int GEOFENCE_DELAY_IN_MILLISECONDS = 10*1000;
+    public static final int GEOFENCE_DELAY_IN_MILLISECONDS = 30*1000;
     public static final float GEOFENCE_RADIUS_IN_METERS = 20;
     public static final String RECEIVER_RESULT_DATA_KEY = "Data_Key";
     public static final String CUSTOM_INTENT = "com.example.scavengerhunt.intent.action.TEST";
