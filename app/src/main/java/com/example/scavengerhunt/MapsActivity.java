@@ -74,7 +74,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             for(Location location:locationResult.getLocations()){
                 if(location != null){
                     Log.d("MyLocation", "("+location.getLatitude()+","+location.getLongitude()+")");
-                    //Toast.makeText(MapsActivity.this, " ( "+location.getLatitude()+" , "+location.getLongitude()+" ) ", Toast.LENGTH_SHORT).show();
                     LatLng loc = new LatLng(location.getLatitude(), location.getLongitude());
                     Marker m = mMap.addMarker(new MarkerOptions().position(loc).title("Me"));
                     animateMarker(m, loc, true);
@@ -88,7 +87,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         public void onReceive(Context context, Intent intent) {
             String s = intent.getStringExtra("RESULT");
             Toast.makeText(MapsActivity.this, s, Toast.LENGTH_SHORT).show();
-            //mTextView.setText(s);
             Log.d(TAG, s);
         }
     };
@@ -199,7 +197,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         Log.d(TAG, "Geofencing successfully removed.");
                         mPendingGeofenceTask = PendingGeofenceTask.NONE;
                         updateGeofencesAdded(!getGeofencesAdded());
-                        //setButtonsEnabledState();
                     }
 
 
@@ -262,14 +259,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     private GeofencingRequest getGeofencingRequest() {
         GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
-        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
+        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER |
+                GeofencingRequest.INITIAL_TRIGGER_DWELL);
         builder.addGeofences(geofenceList);
         return builder.build();
     }
-
-
-
-
 
     private void populateGeofenceList() {
         for (Map.Entry<String, LatLng> entry : Constants.LANDMARKS.entrySet()) {
@@ -281,9 +275,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             Constants.GEOFENCE_RADIUS_IN_METERS
                     )
                     .setExpirationDuration(-1)
-                    .setLoiteringDelay(Constants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
+                    .setLoiteringDelay(Constants.GEOFENCE_DELAY_IN_MILLISECONDS)
                     .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
-                            Geofence.GEOFENCE_TRANSITION_EXIT)
+                            Geofence.GEOFENCE_TRANSITION_EXIT |
+                            Geofence.GEOFENCE_TRANSITION_DWELL)
                     .build());
         }
     }
@@ -399,25 +394,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         });
     }
 
-/*
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if(hasPermission() == true) {
-            startLocationUpdate();
-        }else{
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    MY_PERMISSIONS_REQUEST_READ_CONTACTS);
-        }
-    }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        stopLocationUpdate();
-    }
-    */
-
     @SuppressLint("MissingPermission")
     private void startLocationUpdate(){
         mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, null);
@@ -428,20 +404,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
     }
     protected void createLocationRequest() {
-
         mLocationRequest = LocationRequest.create();
-        //mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(1000);
         mLocationRequest.setFastestInterval(500);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
     }
-
-    /*
-    private boolean hasPermission(){
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
-    }
-    */
 
     /**
      * Callback received when a permissions request has been completed.
